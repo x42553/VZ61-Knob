@@ -1,42 +1,25 @@
-/*  ============================================================
-    Vz.61 Extended Charging Knob — Parametric OpenSCAD
-    Copyright (c) 2026 Simon Fischer
-    First published: 2026-07-20
-    Canonical source: https://github.com/x42553/VZ61-Knob/
-    License: CC BY-SA 4.0
-             https://creativecommons.org/licenses/by-sa/4.0/
-
-    You may print, modify, and share this design — including commercially — provided you (a) credit the author and link the canonical source, and (b) release any derivative under this same license. You may NOT relicense this design or any derivative under more restrictive terms, and no one may assert claims against people printing or sharing it under this license.
-
-    Authorship provenance: full development history (v1..v16, fit-test records) lives in the canonical repo. If anyone claims ownership of this design, check the commit history there. Printed parts carry an embedded internal watermark.
-    ============================================================ */
-    /*  Parametric Vz.61 Charging Knob — v16
+/*  Parametric Vz.61 Charging Knob — v17
     body_style: "knurl" | "fin" | "spur"
-      knurl: round knurled knob          (face-down print)
-      fin:   blade in the face plane     (face-down print)
-      spur:  blade standing OFF the receiver — hollow window, jimped +
-             curved trailing edge (print lying on blade side; small
-             support tower under the nub only)
     fit_check=true: plain cylinder coupon body
-    socket=true: bayonet keyhole to stow/use the OG knob — twist 90° CCW,
-      lock with radial M3 grub screw. KNURL/FIN ONLY. Conical roof.
-      screw_mode: "selftap" (FDM/SLS) | "tap" (SLA/CNC; spec "M3 THRU"
-      on the drawing — threads are NOT modeled) | "clearance" | "none"
+    socket=true: bayonet keyhole (knurl/fin only), conical roof,
+      screw_mode selects grub hole spec (selftap/tap/clearance/none)
     knurl_preset: "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
-    v16 WATERMARKS (provenance, not protection — geometry is always
-    removable/remodelable; pair with an explicit license):
-      wm_visible:  small deboss on the bolt-side face (deters lazy
-                   re-uploads; trivially sanded/edited away)
-      wm_internal: text-shaped VOID buried inside solid material —
-                   invisible on the part, visible in slicer layer
-                   preview, provable by sectioning a print. Auto-skipped
-                   when socket=true (no safe solid volume remains).
-    
-    v16 FIX: fit label on the spur previously landed outside the 8mm blade thickness (no label printed); now placed on the base top face beside the nub, rotated to fit.
-    
-    Two-tier obround nub (dims = OVERALL), head_uch default 0 (validated
-    flat bearing ledge). Print: 100% infill, 5+ walls, layer 0.2mm max,
-    CF-nylon for fin/spur. NO support inside the socket cavity.
+    Watermarks: wm_visible (deboss) + wm_internal (buried void,
+      auto-skipped with socket)
+    v17: spur_support — INTEGRATED breakaway support for the spur's
+      side-lying FDM print (replaces slicer-generated tower):
+      - tower under the nub, sized from the nub's rotated footprint,
+        separated by sup_gap (~1 layer); snaps off by hand
+      - if fin_angle makes the nub protrude past the blade face
+        (|sin(fin_angle)| large, e.g. 90deg), fused skid rails are added
+        under the blade automatically so the part still lies flat;
+        rails are sacrificial — cut/sand off after printing (echo warns)
+      - FDM ONLY: SLS needs no supports at all (powder bed);
+        SLA should use the slicer's own angled supports instead
+    Two-tier obround nub (dims = OVERALL), head_uch default 0
+    (validated flat bearing ledge).
+    Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for
+    fin/spur. NO support inside the socket cavity.
 */
 
 // ---- Mode ----
@@ -44,29 +27,32 @@ fit_check   = false;
 body_style  = "spur";   // "knurl" | "fin" | "spur"
 socket      = false;     // OG-knob bayonet socket (knurl/fin only)
 
+// ---- Spur integrated print support (FDM side-lying print) ----
+spur_support = true;    // breakaway tower under the nub (spur only)
+sup_gap      = 0.20;     // breakaway gap, ~1 layer height
+sup_inset    = 0.6;      // tower shrink vs nub footprint, per side
+
 // ---- Watermarks ----
 wm_text     = "SF-26";   // your mark; keep short
 wm_visible  = true;      // deboss on bolt-side face
 wm_internal = true;      // buried void (skipped when socket=true)
 wm_size     = 2.2;
-wm_deep     = 0.4;       // visible deboss depth
-wm_void_t   = 0.6;       // internal void thickness (keep <= 0.6)
+wm_deep     = 0.4;
+wm_void_t   = 0.6;
 
 // ---- Socket ----
-sock_clear  = 0.15;   // per-side vs steel OG nub; coupon-test 0.15/0.25
-sock_plate  = 1.45;   // retention plate; MAX = OG neck height 1.5
-sweep_step  = 5;      // degrees per slice of the 90° neck sweep cut
-roof_angle  = 40;     // cavity roof cone; >=~35 support-free; 0 = flat
+sock_clear  = 0.15;
+sock_plate  = 1.45;   // MAX = OG neck height 1.5
+sweep_step  = 5;
+roof_angle  = 40;     // >=~35 support-free; 0 = flat (ok for SLA)
 
 // ---- Grub screw hole ----
 screw_mode  = "selftap";  // "selftap" | "tap" | "clearance" | "none"
-// selftap:   O2.6 — M3 self-taps into FDM/SLS plastic
-// tap:       O2.5 — M3x0.5 tap drill; hand-tap (SLA/CNC)
-// clearance: O3.4 — M3 passes through (split-plate variants)
-// Rendered/SLA threads: use BOSL2 threaded_rod(..., internal=true)
+// selftap O2.6 (FDM/SLS) | tap O2.5 (SLA/CNC, spec "M3 THRU" on the
+// drawing — threads not modeled) | clearance O3.4 | none
 
 // ---- Knob / boss ----
-knob_d      = 18;     // 18 recommended if socket=true; 16 min otherwise
+knob_d      = 18;
 knob_h      = 10;
 rim_chamfer = 0.8;
 
@@ -76,9 +62,7 @@ dish_dia    = 12;
 
 // ---- Knurl ----
 knurl_preset = "fdm04";  // "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
-
-// used only when knurl_preset = "custom"
-knurl_n     = 24;
+knurl_n     = 24;        // used only when knurl_preset = "custom"
 knurl_depth = 0.6;
 helix_angle = 30;
 
@@ -120,8 +104,7 @@ trail_curve = 2.5;    // inward bow (sagitta); 0 = straight
 neck_len   = 9;      neck_w = 3.0;  neck_h = 1.5;
 head_len   = 10;     head_w = 4.0;  head_h = 3.5;
 head_ch    = 0.5;
-head_uch   = 0;      // 0 = flat ledge (VALIDATED: full bearing, no
-                     // wobble; prints support-free). 0.3 max if needed.
+head_uch   = 0;      // 0 = flat ledge (VALIDATED). 0.3 max if needed.
 
 fit_clear  = 0.0;    // validated on coupons: 0.0
 
@@ -148,6 +131,8 @@ module knob(fc) {
             translate([0,0,knob_h + neck_h])
                 obround_ch2(head_len - head_w, head_w/2 - fc,
                             head_h, head_ch, head_uch);
+            if (body_style=="spur" && spur_support && !fit_check)
+                rotate([0,0,fin_angle]) spur_support_body();
         }
         if (use_socket) socket_cut();
         if (!fit_check && !use_socket && body_style=="knurl" && dish_depth > 0) {
@@ -168,6 +153,50 @@ module knob(fc) {
     }
 }
 
+// ================ SPUR SUPPORT ================
+// Local blade frame: thickness along Y, bed = -Y face when side-lying.
+// Nub footprint in this frame = world nub rotated by -fin_angle.
+
+// lowest extent of the head footprint below the nub axis, local frame
+function nub_hy() = (head_len - head_w)/2 * abs(sin(fin_angle)) + head_w/2;
+
+// local-frame head footprint, grown (g>0) or shrunk (g<0) per side
+module nub_fp2d(g)
+    rotate([0,0,-fin_angle]) stadium2d(head_len, head_w, g);
+
+module spur_support_body() {
+    prot = max(0, nub_hy() - spur_thick/2);   // nub past blade face?
+    rail_h = prot > 0 ? prot + 0.4 : 0;       // skid rail height
+    bed  = -(spur_thick/2 + rail_h);          // local bed plane (y)
+
+    if (rail_h > 0)
+        echo(str("SPUR SUPPORT: nub protrudes ", prot,
+                 "mm past the blade face at fin_angle=", fin_angle,
+                 " -> fused skid rails (h=", rail_h,
+                 "mm) added under the blade. CUT OFF after printing."));
+
+    // breakaway tower: nub footprint swept down to the bed, gap all
+    // around the nub itself (snaps off; no scar on the bearing ledge)
+    translate([0,0,knob_h])
+        linear_extrude(neck_h + head_h)
+            difference() {
+                intersection() {
+                    hull() {
+                        nub_fp2d(-sup_inset);
+                        translate([0,-30]) nub_fp2d(-sup_inset);
+                    }
+                    translate([-60, bed]) square([120, 60]);
+                }
+                nub_fp2d(sup_gap);
+            }
+
+    // fused sacrificial skid rails so the blade still lies flat
+    if (rail_h > 0)
+        for (sx = [-1, 1])
+            translate([sx*(spur_base/2 - 2) - 0.6, bed, 0])
+                cube([1.2, rail_h + 0.01, knob_h]);
+}
+
 // ================ WATERMARKS ================
 module deboss_text(t, sz, dp, rot=0)
     linear_extrude(dp + 0.01)
@@ -175,7 +204,6 @@ module deboss_text(t, sz, dp, rot=0)
             text(t, size=sz, font="Liberation Sans:style=Bold",
                  halign="center", valign="center");
 
-// visible deboss: bolt-side face, opposite the fit label
 module wm_visible_cut() {
     if (body_style == "spur")
         rotate([0,0,fin_angle])
@@ -186,14 +214,10 @@ module wm_visible_cut() {
             deboss_text(wm_text, wm_size, wm_deep);
 }
 
-// internal void: buried in solid material, >=0.8mm from all surfaces.
-// Invisible on the part; shows in slicer layer preview; provable by
-// sectioning. Skipped with socket (no safe solid volume remains).
 module wm_internal_cut(sock) {
     if (sock)
         echo("WATERMARK: internal void skipped (socket occupies the safe volume)");
     else if (body_style == "spur")
-        // inside the solid web band under the nub (world z 6.2..6.8)
         rotate([0,0,fin_angle])
             translate([0, 0, knob_h - spur_web + 1.2])
                 linear_extrude(wm_void_t)
@@ -201,7 +225,6 @@ module wm_internal_cut(sock) {
                          font="Liberation Sans:style=Bold",
                          halign="center", valign="center");
     else
-        // mid-body, clear of dish below and nub root above
         translate([0, 0, 0.42*knob_h])
             linear_extrude(wm_void_t)
                 text(wm_text, size=wm_size,
@@ -222,20 +245,16 @@ module socket_cut() {
     assert(cone_h > 0 || roof_angle == 0,
            "socket roof cone does not fit: increase knob_h or lower roof_angle");
 
-    // through-plate keyhole: head entry + neck 90° CCW swept region
     translate([0,0,-0.01]) linear_extrude(sock_plate + 0.02) {
         stadium2d(head_len, head_w, sock_clear);
         for (a = [0 : sweep_step : 90])
             rotate([0,0,a]) stadium2d(neck_len, neck_w, sock_clear);
     }
-    // rotation cavity: snug axially at the rim
     translate([0,0,sock_plate])
         cylinder(d=cav_d, h=head_h + 0.2);
-    // self-supporting conical roof
     if (roof_angle > 0)
         translate([0,0,cav_top])
             cylinder(d1=cav_d, d2=0.8, h=cone_h);
-    // radial grub hole (+Y): bears on head end after twist
     screw_d = screw_mode == "selftap"   ? 2.6 :
               screw_mode == "tap"       ? 2.5 :
               screw_mode == "clearance" ? 3.4 : 0;
@@ -349,11 +368,11 @@ function kp_from_pitch(d, pitch, depth, ha) =
     [max(8, round(PI*d/pitch)), depth, ha];
 
 function knurl_params(p, d) =
-    p == "fdm04" ? kp_from_pitch(d, 2.0, 0.60, 30) :  // 0.4 nozzle floor
-    p == "fdm06" ? kp_from_pitch(d, 3.2, 0.80, 30) :  // coarse, deep
-    p == "sla"   ? kp_from_pitch(d, 1.0, 0.35, 30) :  // fine; brittle-safe
-    p == "sls"   ? kp_from_pitch(d, 1.6, 0.50, 30) :  // powder-rounding safe
-    p == "cnc"   ? kp_from_pitch(d, 1.0, 0.30, 30) :  // visual DIN 82 RGE 1.0
+    p == "fdm04" ? kp_from_pitch(d, 2.0, 0.60, 30) :
+    p == "fdm06" ? kp_from_pitch(d, 3.2, 0.80, 30) :
+    p == "sla"   ? kp_from_pitch(d, 1.0, 0.35, 30) :
+    p == "sls"   ? kp_from_pitch(d, 1.6, 0.50, 30) :
+    p == "cnc"   ? kp_from_pitch(d, 1.0, 0.30, 30) :
                    [knurl_n, knurl_depth, helix_angle];
 
 module knurled_knob() {
