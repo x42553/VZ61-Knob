@@ -121,10 +121,6 @@ integrated supports fight resin peel-force orientation.
 
 ## Version history
 
-Development was conversational-iterative; versions up to v9 were pasted in
-chat, v10 onward exist as complete files. Version numbers reflect design
-milestones, not all of which shipped as standalone files.
-
 | Ver | Changes |
 |-----|---------|
 | v1  | Initial concept: knurled knob, cylindrical pin nub. Knurl was fake (straight tangent cuts), dish math wrong, pin nub structurally doomed — all identified and rebuilt |
@@ -151,8 +147,8 @@ milestones, not all of which shipped as standalone files.
 ## License & attribution
 
 **License:** [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
-**Author:** Simon Fischer — first published 2026-07-20
-**Canonical source:** https://github.com/x42553/VZ61-Knob/upload
+**Author:** Simon Fischer - first published 2026-07-20
+**Canonical source:** https://github.com/x42553/VZ61-Knob/
 
 You are free to print, modify, share, and sell prints of this design,
 provided you credit the author with a link to the canonical source and
