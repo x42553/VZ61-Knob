@@ -1,4 +1,4 @@
-/*  Parametric Vz.61 Charging Knob — v12
+/*  Parametric Vz.61 Charging Knob — v13
     body_style: "knurl" | "fin" | "spur"
       knurl: round knurled knob          (face-down print)
       fin:   blade in the face plane     (face-down print)
@@ -8,6 +8,10 @@
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole to stow/use the OG knob — twist 90° CCW,
       lock with radial M3 grub screw. KNURL/FIN ONLY.
+    knurl_preset: process-optimized knurl texture, pitch-based:
+      "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
+      (cnc = visual match of DIN 82 RGE 1.0 — for renders/mockups only;
+       real machined knurls are spec'd on the drawing, not modeled)
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
     45° head underside chamfer.
     Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for fin/spur.
@@ -35,6 +39,9 @@ dish_depth  = 1.5;
 dish_dia    = 12;
 
 // ---- Knurl ----
+knurl_preset = "fdm04";  // "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
+
+// used only when knurl_preset = "custom"
 knurl_n     = 24;
 knurl_depth = 0.6;
 helix_angle = 30;
@@ -194,7 +201,7 @@ module jimping2d() {
         s  = sign(sw);
         for (i = [0:n]) {
             a = aP + s*(mA + i*pA);
-            translate(trail_O() + R*[cos(a), sin(a)])
+            translate(O + R*[cos(a), sin(a)])
                 circle(r=jimp_r, $fn=24);
         }
     } else {
@@ -239,10 +246,25 @@ module spur_body()
         linear_extrude(spur_thick, center=true)
             spur_profile();
 
-// ================ SHARED ================
+// ================ KNURL ================
+// preset -> [tooth count, depth, helix angle], from process-limited pitch
+function kp_from_pitch(d, pitch, depth, ha) =
+    [max(8, round(PI*d/pitch)), depth, ha];
+
+function knurl_params(p, d) =
+    p == "fdm04" ? kp_from_pitch(d, 2.0, 0.60, 30) :  // 0.4 nozzle floor
+    p == "fdm06" ? kp_from_pitch(d, 3.2, 0.80, 30) :  // coarse, deep
+    p == "sla"   ? kp_from_pitch(d, 1.0, 0.35, 30) :  // fine; brittle-safe depth
+    p == "sls"   ? kp_from_pitch(d, 1.6, 0.50, 30) :  // powder-rounding safe
+    p == "cnc"   ? kp_from_pitch(d, 1.0, 0.30, 30) :  // visual DIN 82 RGE 1.0
+                   [knurl_n, knurl_depth, helix_angle];
+
 module knurled_knob() {
+    kp = knurl_params(knurl_preset, knob_d);
+    echo(str("knurl: n=", kp[0], " pitch=", PI*knob_d/kp[0],
+             "mm depth=", kp[1], " helix=", kp[2]));
     intersection() {
-        knurl_cyl(knob_d, knob_h, knurl_n, knurl_depth, helix_angle);
+        knurl_cyl(knob_d, knob_h, kp[0], kp[1], kp[2]);
         rotate_extrude()
             polygon([
                 [0,0],[knob_d/2-rim_chamfer,0],[knob_d/2,rim_chamfer],
@@ -262,6 +284,7 @@ module knurl_cyl(d, h, n, depth, ha) {
     }
 }
 
+// ================ SHARED ================
 module obround(mid, r, h)
     hull() for (x = [-mid/2, mid/2])
         translate([x,0,0]) cylinder(r=r, h=h);
