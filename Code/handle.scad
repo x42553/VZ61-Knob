@@ -1,22 +1,23 @@
-/*  Parametric Vz.61 Charging Knob — v19
+/*  Parametric Vz.61 Charging Knob — v20
     body_style: "knurl" | "fin" | "spur" | "scallop"
-      knurl:   round knurled knob, thumb dish     (face-down print)
-      fin:     blade in the face plane            (face-down print)
-      spur:    blade standing off the receiver    (side-lying print,
-               spur_support breakaway tower)
-      scallop: v19 — round knob, raked instead of flat: body is taller
-               on one side (scal_high) than the other (scal_low), the
-               slanted exposed face is dished concave. High side points
-               at fin_angle. Prints NUB-UP standing on an integrated
-               breakaway pedestal (scal_support) that conforms to the
-               raked face — rake, dish and knurl all print as quality
-               surfaces; nub needs no support in this orientation.
-               Socket is NOT available on scallop (keyhole needs a flat
-               face); knurl texture optional via scal_knurl.
+    v20: perimeter TEXTURE selector, applied to the round knob and the
+      scallop body (fin/spur are untextured blades):
+        texture = "knurl"  helical diamond knurl (via knurl_preset)
+                  "vserr"  vertical serrations — coin-edge grooves
+                           parallel to the nub axis. Prints crisply
+                           face-down (grooves are vertical walls);
+                           best FDM texture of the set.
+                  "hserr"  horizontal serrations — circumferential
+                           ring grooves. Groove ceilings are small
+                           overhangs when printed face-down: fine at
+                           serr_depth <= ~0.8, slightly softer than
+                           vserr on FDM. Ideal on SLA/SLS/CNC (a
+                           machined look: straight plunge grooves).
+                  "smooth" plain cylinder
+      serr_pitch / serr_depth size both serration styles.
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole (knurl/fin only), conical roof,
       screw_mode selects grub hole spec
-    knurl_preset: "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
     Watermarks: wm_visible (deboss) + wm_internal (buried void,
       auto-skipped with socket)
     Two-tier obround nub (dims = OVERALL), head_uch default 0
@@ -27,20 +28,25 @@
 
 // ---- Mode ----
 fit_check   = false;
-body_style  = "scallop";   // "knurl" | "fin" | "spur" | "scallop"
+body_style  = "knurl";   // "knurl" | "fin" | "spur" | "scallop"
 socket      = false;     // OG-knob bayonet socket (knurl/fin only)
 
+// ---- Body texture (round knob + scallop) ----
+texture     = "knurl";   // "knurl" | "vserr" | "hserr" | "smooth"
+serr_pitch  = 2.5;       // serration spacing, both orientations
+serr_depth  = 0.7;       // groove depth (= groove radius)
+
 // ---- Scallop (raked concave round knob) ----
-scal_low    = 2;      // body height at the low edge (from bolt face)
-scal_high   = 5;     // body height at the high edge / peak
+scal_low    = 3;      // body height at the low edge (from bolt face)
+scal_high   = 4;     // body height at the high edge / peak
 scal_dish_r = 14;     // concave sphere radius (smaller = deeper cup)
 scal_dish_d = 1.8;    // sphere bite depth at the face center
-scal_knurl  = true;   // knurled perimeter (uses knurl_preset) or smooth
-scal_support = false; // integrated breakaway pedestal for nub-up print
+scal_textured = true; // apply `texture` to perimeter (false = smooth)
+scal_support  = false;// integrated breakaway pedestal for nub-up print
 
 // ---- Spur integrated print support (FDM side-lying print) ----
 spur_support = false;    // breakaway tower under the nub (spur only)
-sup_gap      = 0.20;     // breakaway gap, ~1 layer height (spur+scallop)
+sup_gap      = 0.20;     // breakaway gap, ~1 layer (spur + scallop)
 sup_inset    = 0.6;      // tower shrink vs nub footprint, per side
 
 // ---- Watermarks ----
@@ -71,7 +77,7 @@ rim_chamfer = 0.8;
 dish_depth  = 1.5;
 dish_dia    = 12;
 
-// ---- Knurl ----
+// ---- Knurl (used when texture = "knurl") ----
 knurl_preset = "fdm04";  // "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
 knurl_n     = 24;        // used only when knurl_preset = "custom"
 knurl_depth = 0.6;
@@ -138,7 +144,7 @@ module knob(fc) {
             else if (body_style=="fin")     rotate([0,0,fin_angle]) fin_body();
             else if (body_style=="spur")    rotate([0,0,fin_angle]) spur_body();
             else if (body_style=="scallop") scallop_body();
-            else                            knurled_knob();
+            else                            round_knob();
             translate([0,0,knob_h])
                 obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
             translate([0,0,knob_h + neck_h])
@@ -168,25 +174,71 @@ module knob(fc) {
     }
 }
 
+// ================ TEXTURES ================
+// textured cylinder stock, 0..h, dispatched on `texture`
+module tex_cyl(d, h) {
+    if (texture == "knurl") {
+        kp = knurl_params(knurl_preset, d);
+        echo(str("knurl: n=", kp[0], " pitch=", PI*d/kp[0],
+                 "mm depth=", kp[1], " helix=", kp[2]));
+        knurl_cyl(d, h, kp[0], kp[1], kp[2]);
+    }
+    else if (texture == "vserr") vserr_cyl(d, h);
+    else if (texture == "hserr") hserr_cyl(d, h);
+    else cylinder(d=d, h=h);
+}
+
+// vertical serrations: coin-edge grooves parallel to the axis
+module vserr_cyl(d, h) {
+    n = max(8, round(PI*d/serr_pitch));
+    linear_extrude(h, convexity=10)
+        difference() {
+            circle(d=d);
+            for (i = [0:n-1])
+                rotate([0,0, i*360/n])
+                    translate([d/2, 0]) circle(r=serr_depth, $fn=24);
+        }
+}
+
+// horizontal serrations: circumferential ring grooves, centered
+// between the rim chamfers
+module hserr_cyl(d, h) {
+    span = h - 2*(rim_chamfer + serr_depth);
+    n    = max(1, floor(span/serr_pitch));
+    z0   = (h - n*serr_pitch)/2;
+    difference() {
+        cylinder(d=d, h=h);
+        for (i = [0:n])
+            translate([0,0, z0 + i*serr_pitch])
+                rotate_extrude(convexity=4)
+                    translate([d/2, 0]) circle(r=serr_depth, $fn=24);
+    }
+}
+
+// round knob body: textured stock + rim chamfer envelope
+module round_knob() {
+    intersection() {
+        tex_cyl(knob_d, knob_h);
+        rotate_extrude()
+            polygon([
+                [0,0],[knob_d/2-rim_chamfer,0],[knob_d/2,rim_chamfer],
+                [knob_d/2,knob_h-rim_chamfer],[knob_d/2-rim_chamfer,knob_h],[0,knob_h]
+            ]);
+    }
+}
+
 // ================ SCALLOP ================
-// Raked plane in the fin_angle-local frame: face height varies linearly
-// from scal_low at local -X to scal_high at local +X. Rake angle:
 function scal_a()  = atan((scal_high - scal_low) / knob_d);
-// plane height at local x=0:
 function scal_z0() = knob_h - (scal_low + scal_high)/2;
 
 module scallop_body() {
     assert(scal_high > scal_low, "scallop: scal_high must exceed scal_low");
-    zb = knob_h - scal_high;   // lowest body point (high-side rim)
+    zb = knob_h - scal_high;
     difference() {
-        // stock: knurled or plain, bolt-side rim chamfer
         intersection() {
-            if (scal_knurl) {
-                kp = knurl_params(knurl_preset, knob_d);
-                translate([0,0,zb])
-                    knurl_cyl(knob_d, scal_high, kp[0], kp[1], kp[2]);
-            } else
-                translate([0,0,zb]) cylinder(d=knob_d, h=scal_high);
+            translate([0,0,zb])
+                if (scal_textured) tex_cyl(knob_d, scal_high);
+                else               cylinder(d=knob_d, h=scal_high);
             rotate_extrude()
                 polygon([
                     [0,zb],[knob_d/2,zb],
@@ -195,11 +247,9 @@ module scallop_body() {
                 ]);
         }
         rotate([0,0,fin_angle]) {
-            // rake: remove everything below the slanted face plane
             translate([0,0,scal_z0()])
                 rotate([0, scal_a(), 0])
                     translate([0,0,-25]) cube([60,60,50], center=true);
-            // concave dish, centered on the slanted face, bites scal_dish_d
             translate([0,0,scal_z0()])
                 rotate([0, scal_a(), 0])
                     translate([0,0,-(scal_dish_r - scal_dish_d)])
@@ -208,16 +258,12 @@ module scallop_body() {
     }
 }
 
-// breakaway pedestal for the nub-up print: fills bed -> raked face
-// minus sup_gap; part stands on it, rake/dish/knurl print as top-quality
-// surfaces, nub needs no support. Snap off after printing.
 module scallop_pedestal() {
     zb   = knob_h - scal_high;
-    gapv = sup_gap / cos(scal_a());   // vertical gap for the tilted plane
-    bed  = zb - 0.6;                  // pedestal base plane
+    gapv = sup_gap / cos(scal_a());
+    bed  = zb - 0.6;
     intersection() {
         translate([0,0,bed]) cylinder(d=knob_d - 3, h=scal_high + 1);
-        // keep only below (face plane - gap)
         translate([0,0,scal_z0() - gapv])
             rotate([0, scal_a(), 0])
                 translate([0,0,-25]) cube([60,60,50], center=true);
@@ -225,9 +271,6 @@ module scallop_pedestal() {
 }
 
 // ================ BLADE FRAME ================
-// spur_body extrudes via rotate([90,0,90]): blade sits at fin_angle+90
-// in world terms. Spur auxiliaries are authored in blade-local coords
-// (length along X, thickness along Y) and placed through this helper.
 module blade_frame() rotate([0,0,fin_angle + 90]) children();
 
 // ================ SPUR SUPPORT ================
@@ -294,8 +337,6 @@ module wm_internal_cut(sock) {
                          font="Liberation Sans:style=Bold",
                          halign="center", valign="center");
     else
-        // knurl/fin/scallop: mid-body void; for scallop this sits well
-        // above the raked face + dish at all default proportions
         translate([0, 0, 0.42*knob_h])
             linear_extrude(wm_void_t)
                 text(wm_text, size=wm_size,
@@ -445,20 +486,6 @@ function knurl_params(p, d) =
     p == "sls"   ? kp_from_pitch(d, 1.6, 0.50, 30) :
     p == "cnc"   ? kp_from_pitch(d, 1.0, 0.30, 30) :
                    [knurl_n, knurl_depth, helix_angle];
-
-module knurled_knob() {
-    kp = knurl_params(knurl_preset, knob_d);
-    echo(str("knurl: n=", kp[0], " pitch=", PI*knob_d/kp[0],
-             "mm depth=", kp[1], " helix=", kp[2]));
-    intersection() {
-        knurl_cyl(knob_d, knob_h, kp[0], kp[1], kp[2]);
-        rotate_extrude()
-            polygon([
-                [0,0],[knob_d/2-rim_chamfer,0],[knob_d/2,rim_chamfer],
-                [knob_d/2,knob_h-rim_chamfer],[knob_d/2-rim_chamfer,knob_h],[0,knob_h]
-            ]);
-    }
-}
 
 module knurl_cyl(d, h, n, depth, ha) {
     twist = 360 * h * tan(ha) / (PI * d);
