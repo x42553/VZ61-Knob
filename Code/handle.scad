@@ -1,7 +1,8 @@
-/*  Parametric Extended Knurled Vz.61 Charging Knob — v5
+/*  Parametric Extended Knurled Vz.61 Charging Knob — v6
     - fit_check=true: plain cylinder body, no dish (fast fit coupon)
     - fit_check=false: full knurl + chamfers + thumb dish (final)
     - Two-tier obround nub, all dims = OVERALL tip-to-tip
+    - head_uch: 45° underside chamfer on head -> support-free print
     - Debossed fit_clear label on top face
     Print: flat face down, 100% infill, 5+ walls, layer 0.2mm max.
     0.6mm nozzle: consider knurl_n=16 / knurl_depth=0.8 for crisper diamonds.
@@ -33,8 +34,11 @@ head_len   = 10;     // top tier:    overall length
 head_w     = 4.0;    //              width
 head_h     = 3.5;    //              height
 head_ch    = 0.5;    //              chamfer around top edge
+head_uch   = 0.5;    //              underside chamfer, 45° support-free
+                     //              (0 = flat ledge; reduce to 0.3 if the
+                     //              head won't seat flush in the slot)
 
-fit_clear  = 0.0;    // subtracted from nub half-widths; tune via coupon
+fit_clear  = 0.0;    // subtracted from nub half-widths; negative = tighter
 
 // ---- Variant label ----
 label_size = 2.6;
@@ -58,7 +62,8 @@ module knob(fc) {
             translate([0,0,knob_h])
                 obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
             translate([0,0,knob_h + neck_h])
-                obround_ch(head_len - head_w, head_w/2 - fc, head_h, head_ch);
+                obround_ch2(head_len - head_w, head_w/2 - fc,
+                            head_h, head_ch, head_uch);
         }
         // thumb dish — final version only
         if (!fit_check && dish_depth > 0) {
@@ -101,9 +106,11 @@ module obround(mid, r, h)
     hull() for (x = [-mid/2, mid/2])
         translate([x,0,0]) cylinder(r=r, h=h);
 
-module obround_ch(mid, r, h, ch)
+// head with top chamfer (ch_t) and 45° underside chamfer (ch_b)
+module obround_ch2(mid, r, h, ch_t, ch_b)
     hull() for (x = [-mid/2, mid/2])
         translate([x,0,0]) {
-            cylinder(r=r, h=h - ch);
-            translate([0,0,h-ch]) cylinder(r1=r, r2=r-ch, h=ch);
+            if (ch_b > 0) cylinder(r1=r-ch_b, r2=r, h=ch_b);
+            translate([0,0,ch_b]) cylinder(r=r, h=h-ch_t-ch_b);
+            translate([0,0,h-ch_t]) cylinder(r1=r, r2=r-ch_t, h=ch_t);
         }
