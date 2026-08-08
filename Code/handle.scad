@@ -1,4 +1,4 @@
-/*  Parametric Vz.61 Charging Knob — v14
+/*  Parametric Vz.61 Charging Knob — v15
     body_style: "knurl" | "fin" | "spur"
       knurl: round knurled knob          (face-down print)
       fin:   blade in the face plane     (face-down print)
@@ -8,32 +8,43 @@
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole to stow/use the OG knob — twist 90° CCW,
       lock with radial M3 grub screw. KNURL/FIN ONLY.
-      v14: conical self-supporting cavity roof (no internal bridge,
-      no sag into the head's axial clearance). Cone auto-clamped to fit
-      under the nub root.
+      Conical self-supporting cavity roof (roof_angle); no internal bridge.
+      screw_mode: process-aware grub hole — "selftap" (FDM/SLS),
+      "tap" (SLA/CNC: M3x0.5 tap drill; spec "M3 THRU" on the drawing,
+      threads are NOT modeled by convention), "clearance", "none".
     knurl_preset: process-optimized knurl texture, pitch-based:
       "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
       (cnc = visual match of DIN 82 RGE 1.0 — renders/mockups only.
        NOTE: the socket cavity is an undercut and cannot be milled from
        the face; for CNC the part must be split body + keyhole plate.)
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
-    45° head underside chamfer.
+    45° head underside chamfer (head_uch) — DEFAULT 0: the flat ledge
+    is the validated bearing surface; chamfer caused axial wobble.
     Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for fin/spur.
     NO support inside the socket cavity (unremovable past the plate).
 */
 
 // ---- Mode ----
 fit_check   = false;
-body_style  = "knurl";   // "knurl" | "fin" | "spur"
+body_style  = "spur";   // "knurl" | "fin" | "spur"
 socket      = false;     // OG-knob bayonet socket (knurl/fin only)
 
 // ---- Socket ----
 sock_clear  = 0.15;   // per-side vs steel OG nub; coupon-test 0.15/0.25
 sock_plate  = 1.45;   // retention plate; MAX = OG neck height 1.5
-sock_screw  = 2.6;    // M3 self-tap pilot Ø; 0 = none
 sweep_step  = 5;      // degrees per slice of the 90° neck sweep cut
-roof_angle  = 40;     // cavity roof cone angle (deg from horizontal);
-                      // >= ~35 prints support-free. 0 = flat roof (bridge)
+roof_angle  = 40;     // cavity roof cone angle (deg); >=~35 support-free;
+                      // 0 = flat roof (bridge; ok for SLA)
+
+// ---- Grub screw hole ----
+screw_mode  = "selftap";  // "selftap" | "tap" | "clearance" | "none"
+// selftap:   O2.6 — M3 self-taps into FDM/SLS plastic
+// tap:       O2.5 — M3x0.5 tap drill; hand-tap (SLA/CNC). CNC: spec
+//            "M3 THRU" on the drawing; do NOT model the thread.
+// clearance: O3.4 — M3 passes through (split-plate variants)
+// For rendered/SLA-printed threads, use BOSL2 instead of the cylinder:
+//   include <BOSL2/std.scad>  include <BOSL2/threading.scad>
+//   threaded_rod(d=3, pitch=0.5, l=..., internal=true, orient=BACK);
 
 // ---- Knob / boss ----
 knob_d      = 18;     // 18 recommended if socket=true; 16 min otherwise
@@ -89,9 +100,12 @@ trail_curve = 2.5;   // inward bow depth (sagitta); 0 = straight
 // Also defines the socket negative — these ARE the OG measurements.
 neck_len   = 9;      neck_w = 3.0;  neck_h = 1.5;
 head_len   = 10;     head_w = 4.0;  head_h = 3.5;
-head_ch    = 0.5;    head_uch = 0.5;
+head_ch    = 0.5;
+head_uch   = 0;      // 45deg underside chamfer. 0 = flat ledge (VALIDATED:
+                     // full bearing, no wobble; ledge prints support-free).
+                     // 0.3 max if eased slot entry is ever needed.
 
-fit_clear  = 0;    // validated on coupons: 0.0
+fit_clear  = 0.0;    // validated on coupons: 0.0
 
 // ---- Variant label ----
 label_size = 2.6;
@@ -158,11 +172,14 @@ module socket_cut() {
     if (roof_angle > 0)
         translate([0,0,cav_top])
             cylinder(d1=cav_d, d2=0.8, h=cone_h);
-    // radial M3 grub pilot (+Y): bears on head end after twist
-    if (sock_screw > 0)
+    // radial grub hole (+Y): bears on head end after twist
+    screw_d = screw_mode == "selftap"   ? 2.6 :
+              screw_mode == "tap"       ? 2.5 :
+              screw_mode == "clearance" ? 3.4 : 0;
+    if (screw_d > 0)
         translate([0, knob_d/2 + 1, sock_plate + head_h/2 + 0.1])
             rotate([90,0,0])
-                cylinder(d=sock_screw, h=knob_d/2 - head_len/2 + 2, $fn=24);
+                cylinder(d=screw_d, h=knob_d/2 - head_len/2 + 2, $fn=24);
 }
 
 // ================ FIN ================
