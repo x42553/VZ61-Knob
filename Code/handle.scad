@@ -1,31 +1,35 @@
-/*  Parametric Vz.61 Charging Knob — v9 "extension socket"
-    body_style: "knurl" | "fin"   fit_check: plain coupon body
-    socket=true: bayonet keyhole in the face — insert OG knob, twist 90°,
-      lock with radial M3 grub screw. Swept-shape neck bore -> head bears
-      on plate over its full footprint: usable as a pull-load grip extension.
+/*  Parametric Vz.61 Charging Knob — v10
+    body_style: "knurl" | "fin" | "spur"
+      knurl: round knurled knob          (face-down print)
+      fin:   blade in the face plane     (face-down print)
+      spur:  blade standing OFF the receiver, T-style (print lying on
+             blade side; small support tower under the nub only)
+    fit_check=true: plain cylinder coupon body
+    socket=true: bayonet keyhole to stow/use the OG knob — twist 90° CCW,
+      lock with radial M3 grub screw. KNURL/FIN ONLY (spur has no face).
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
-    45° head underside chamfer -> support-free.
-    Print: face down, 100% infill, 5+ walls, layer 0.2mm max, CF-nylon.
+    45° head underside chamfer.
+    Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for fin/spur.
     NO support inside the socket cavity (unremovable past the plate).
 */
 
 // ---- Mode ----
 fit_check   = false;
-body_style  = "knurl";   // "knurl" | "fin"
-socket      = true;      // OG-knob bayonet socket (replaces dish)
+body_style  = "knurl";   // "knurl" | "fin" | "spur"
+socket      = false;     // OG-knob bayonet socket (knurl/fin only)
 
 // ---- Socket ----
 sock_clear  = 0.15;   // per-side vs steel OG nub; coupon-test 0.15/0.25
 sock_plate  = 1.45;   // retention plate; MAX = OG neck height 1.5
 sock_screw  = 2.6;    // M3 self-tap pilot Ø; 0 = none
-sweep_step  = 7.5;    // degrees per slice of the 90° neck sweep cut
+sweep_step  = 5;      // degrees per slice of the 90° neck sweep cut
 
 // ---- Knob / boss ----
-knob_d      = 18;     // bumped from 16: wall + screw thread budget
+knob_d      = 18;     // 18 recommended if socket=true; 16 min otherwise
 knob_h      = 10;
 rim_chamfer = 0.8;
 
-// ---- Dish (final only, ignored when socket=true) ----
+// ---- Dish (knurl final only; ignored when socket=true) ----
 dish_depth  = 1.5;
 dish_dia    = 12;
 
@@ -34,14 +38,24 @@ knurl_n     = 24;
 knurl_depth = 0.6;
 helix_angle = 30;
 
-// ---- Fin ----
-fin_len     = 22;
-fin_sweep   = 6;
+// ---- Fin (blade in face plane) ----
+fin_len     = 22;    // boss center -> tip center
+fin_sweep   = 6;     // tip drop sideways
 fin_tip_r   = 4;
-fin_scoop_r = 18;
+fin_scoop_r = 18;    // concave hook cut
 fin_scoop_x = 12;
 fin_scoop_y = 16;
-fin_angle   = 0;
+fin_angle   = 90;    // rotation about nub axis (fin AND spur)
+
+// ---- Spur (blade standing off the receiver) ----
+spur_out    = 16;    // projection beyond the old face plane
+spur_thick  = 8;     // blade thickness
+spur_base   = 18;    // base width along X (>= head_len)
+spur_rake   = 6;     // tip sweep in X
+spur_tip_r  = 3.5;
+spur_scoop_r   = 14; // finger-hook cut on leading edge
+spur_scoop_off = 11; // scoop center dist from blade edge; smaller = deeper
+spur_round  = 1.2;   // profile corner rounding
 
 // ---- Nub: two-tier obround (all dims = OVERALL, tip-to-tip) ----
 // Also defines the socket negative — these ARE the OG measurements.
@@ -62,10 +76,12 @@ knob(fit_clear);
 // for (i = [0:2]) translate([i*24, 0, 0]) knob(i * 0.1);
 
 module knob(fc) {
+    use_socket = socket && body_style != "spur" && !fit_check;
     difference() {
         union() {
             if (fit_check)              cylinder(d=knob_d, h=knob_h);
             else if (body_style=="fin") rotate([0,0,fin_angle]) fin_body();
+            else if (body_style=="spur") rotate([0,0,fin_angle]) spur_body();
             else                        knurled_knob();
             translate([0,0,knob_h])
                 obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
@@ -73,8 +89,8 @@ module knob(fc) {
                 obround_ch2(head_len - head_w, head_w/2 - fc,
                             head_h, head_ch, head_uch);
         }
-        if (socket) socket_cut();
-        if (!fit_check && !socket && dish_depth > 0) {
+        if (use_socket) socket_cut();
+        if (!fit_check && !use_socket && body_style=="knurl" && dish_depth > 0) {
             R = (dish_dia*dish_dia/4 + dish_depth*dish_depth) / (2*dish_depth);
             translate([0,0,-(R - dish_depth)]) sphere(r=R);
         }
@@ -87,24 +103,21 @@ module knob(fc) {
 }
 
 // ================ SOCKET ================
-// 2D stadium, overall length len, width w, plus per-side clearance c
 module stadium2d(len, w, c)
     hull() for (x = [-1,1])
         translate([x*(len - w)/2, 0]) circle(r=w/2 + c);
 
 module socket_cut() {
-    // ---- through-plate keyhole ----
+    // through-plate keyhole: head entry + neck 90° CCW swept region
     translate([0,0,-0.01]) linear_extrude(sock_plate + 0.02) {
-        // head entry, along X
         stadium2d(head_len, head_w, sock_clear);
-        // neck 90° CCW swept region (X -> +Y): head bears everywhere else
         for (a = [0 : sweep_step : 90])
             rotate([0,0,a]) stadium2d(neck_len, neck_w, sock_clear);
     }
-    // ---- rotation cavity: head turns here, snug axially ----
+    // rotation cavity: head turns here, snug axially
     translate([0,0,sock_plate])
         cylinder(d=head_len + 2*sock_clear + 0.4, h=head_h + 0.2);
-    // ---- radial M3 grub pilot (+Y): bears on head end after twist ----
+    // radial M3 grub pilot (+Y): bears on head end after twist
     if (sock_screw > 0)
         translate([0, knob_d/2 + 1, sock_plate + head_h/2 + 0.1])
             rotate([90,0,0])
@@ -132,6 +145,27 @@ module fin_body(steps=4) {
     }
     translate([0,0,ch]) linear_extrude(knob_h-2*ch) fin_profile();
 }
+
+// ================ SPUR ================
+// 2D profile in x/y; y maps to world Z (y=knob_h at nub face,
+// y=0 at old outer face, negative y = projecting outward)
+module spur_profile() {
+    offset(r=spur_round) offset(delta=-spur_round)
+    difference() {
+        hull() {
+            translate([-spur_base/2, 0]) square([spur_base, knob_h]);
+            translate([spur_rake, -spur_out + spur_tip_r])
+                circle(r=spur_tip_r);
+        }
+        translate([-(spur_base/2 + spur_scoop_off), -spur_out/2])
+            circle(r=spur_scoop_r);
+    }
+}
+
+module spur_body()
+    rotate([90,0,0])
+        linear_extrude(spur_thick, center=true)
+            spur_profile();
 
 // ================ SHARED ================
 module knurled_knob() {
