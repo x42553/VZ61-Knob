@@ -1,50 +1,51 @@
-/*  Parametric Extended Knurled Vz.61 Charging Knob — v4.1
+/*  Parametric Extended Knurled Vz.61 Charging Knob — v5
     - fit_check=true: plain cylinder body, no dish (fast fit coupon)
-    - fit_check=false: full knurl + chamfers + dish
-    - Two-tier obround nub, debossed fit_clear label
-    Print: flat face down, 100% infill, 5+ walls.
+    - fit_check=false: full knurl + chamfers + thumb dish (final)
+    - Two-tier obround nub, all dims = OVERALL tip-to-tip
+    - Debossed fit_clear label on top face
+    Print: flat face down, 100% infill, 5+ walls, layer 0.2mm max.
+    0.6mm nozzle: consider knurl_n=16 / knurl_depth=0.8 for crisper diamonds.
 */
 
 // ---- Mode ----
-fit_check   = true;   // true = plain fast coupon, false = final knob
+fit_check   = true;   // true = fit coupon, false = final knob
 
 // ---- Knob ----
 knob_d      = 16;
 knob_h      = 10;
 rim_chamfer = 0.8;
 
-// ---- Dish (exposed face, z=0) ----
+// ---- Dish (exposed face, z=0; final only) ----
 dish_depth  = 1.5;
 dish_dia    = 12;
 
-// ---- Knurl ----
+// ---- Knurl (final only) ----
 knurl_n     = 24;
 knurl_depth = 0.6;
 helix_angle = 30;
 
-// ---- Nub: two-tier obround ----
-// "mid" = straight middle section; overall length = mid + 2*r
-neck_mid   = 9;     // bottom tier (sits in bolt slot)
-neck_r     = 2.0;
-neck_h     = 1.5;
+// ---- Nub: two-tier obround (all dims = OVERALL, tip-to-tip) ----
+neck_len   = 9;      // bottom tier: overall length
+neck_w     = 3.0;    //              width
+neck_h     = 1.5;    //              height
 
-head_mid   = 10;    // top tier (retaining head)
-head_r     = 2.0;
-head_h     = 3.5;
-head_ch    = 0.5;   // chamfer around top edge
+head_len   = 10;     // top tier:    overall length
+head_w     = 4.0;    //              width
+head_h     = 3.5;    //              height
+head_ch    = 0.5;    //              chamfer around top edge
 
-fit_clear  = 0.0;   // subtracted from nub radii; tune via test coupon
+fit_clear  = 0.0;    // subtracted from nub half-widths; tune via coupon
 
 // ---- Variant label ----
 label_size = 2.6;
-label_deep = 0.4;   // 2 layers at 0.2mm
+label_deep = 0.4;    // 2 layers at 0.2mm
 
 $fn = 90;
 
 // ================= MAIN =================
 knob(fit_clear);
 
-// batch of variants instead:
+// coupon batch — uncomment for fit-check run:
 // for (i = [0:2]) translate([i*24, 0, 0]) knob(i * 0.1);
 
 module knob(fc) {
@@ -55,17 +56,17 @@ module knob(fc) {
             else
                 knurled_knob();
             translate([0,0,knob_h])
-                obround(neck_mid, neck_r - fc, neck_h);
+                obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
             translate([0,0,knob_h + neck_h])
-                obround_ch(head_mid, head_r - fc, head_h, head_ch);
+                obround_ch(head_len - head_w, head_w/2 - fc, head_h, head_ch);
         }
-        // thumb dish — final version only (skip on coupon: faster, flatter bed face)
+        // thumb dish — final version only
         if (!fit_check && dish_depth > 0) {
             R = (dish_dia*dish_dia/4 + dish_depth*dish_depth) / (2*dish_depth);
             translate([0,0,-(R - dish_depth)]) sphere(r=R);
         }
         // debossed variant label on top face, beside the nub
-        translate([0, -(head_r + 1.2 + label_size/2), knob_h - label_deep])
+        translate([0, -(head_w/2 + 1.2 + label_size/2), knob_h - label_deep])
             linear_extrude(label_deep + 0.01)
                 text(str(fc), size=label_size,
                      font="Liberation Sans:style=Bold",
