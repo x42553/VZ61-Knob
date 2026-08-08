@@ -1,22 +1,24 @@
-/*  Parametric Vz.61 Charging Knob — v18
-    body_style: "knurl" | "fin" | "spur"
+/*  Parametric Vz.61 Charging Knob — v19
+    body_style: "knurl" | "fin" | "spur" | "scallop"
+      knurl:   round knurled knob, thumb dish     (face-down print)
+      fin:     blade in the face plane            (face-down print)
+      spur:    blade standing off the receiver    (side-lying print,
+               spur_support breakaway tower)
+      scallop: v19 — round knob, raked instead of flat: body is taller
+               on one side (scal_high) than the other (scal_low), the
+               slanted exposed face is dished concave. High side points
+               at fin_angle. Prints NUB-UP standing on an integrated
+               breakaway pedestal (scal_support) that conforms to the
+               raked face — rake, dish and knurl all print as quality
+               surfaces; nub needs no support in this orientation.
+               Socket is NOT available on scallop (keyhole needs a flat
+               face); knurl texture optional via scal_knurl.
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole (knurl/fin only), conical roof,
-      screw_mode selects grub hole spec (selftap/tap/clearance/none)
+      screw_mode selects grub hole spec
     knurl_preset: "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
     Watermarks: wm_visible (deboss) + wm_internal (buried void,
       auto-skipped with socket)
-    v18: spur blade orientation corrected — spur_body now extrudes with
-      rotate([90,0,90]) (blade +90deg vs v17; field-verified correct
-      facing). ALL spur auxiliaries (support tower, fit label, both
-      watermarks) re-derived in the new blade frame (fin_angle + 90).
-      Consequence: at the default fin_angle=90 the nub head now lies
-      WITHIN the blade thickness -> the simple breakaway tower suffices
-      and no skid rails are generated. Rails still auto-appear for
-      fin_angle near 0/180, where the head protrudes past the blade
-      faces (echo warns; cut rails off after printing).
-    spur_support: FDM ONLY — SLS needs no supports (powder bed);
-      SLA should use the slicer's own angled supports instead.
     Two-tier obround nub (dims = OVERALL), head_uch default 0
     (validated flat bearing ledge).
     Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for
@@ -25,18 +27,26 @@
 
 // ---- Mode ----
 fit_check   = false;
-body_style  = "spur";   // "knurl" | "fin" | "spur"
+body_style  = "scallop";   // "knurl" | "fin" | "spur" | "scallop"
 socket      = false;     // OG-knob bayonet socket (knurl/fin only)
+
+// ---- Scallop (raked concave round knob) ----
+scal_low    = 2;      // body height at the low edge (from bolt face)
+scal_high   = 5;     // body height at the high edge / peak
+scal_dish_r = 14;     // concave sphere radius (smaller = deeper cup)
+scal_dish_d = 1.8;    // sphere bite depth at the face center
+scal_knurl  = true;   // knurled perimeter (uses knurl_preset) or smooth
+scal_support = false; // integrated breakaway pedestal for nub-up print
 
 // ---- Spur integrated print support (FDM side-lying print) ----
 spur_support = false;    // breakaway tower under the nub (spur only)
-sup_gap      = 0.2;     // breakaway gap, ~1 layer height
+sup_gap      = 0.20;     // breakaway gap, ~1 layer height (spur+scallop)
 sup_inset    = 0.6;      // tower shrink vs nub footprint, per side
 
 // ---- Watermarks ----
-wm_text     = "SF-26";   // your mark; keep short
-wm_visible  = true;      // deboss on bolt-side face
-wm_internal = true;      // buried void (skipped when socket=true)
+wm_text     = "SF-26";
+wm_visible  = true;
+wm_internal = true;
 wm_size     = 2.2;
 wm_deep     = 0.4;
 wm_void_t   = 0.6;
@@ -54,10 +64,10 @@ screw_mode  = "selftap";  // "selftap" | "tap" | "clearance" | "none"
 
 // ---- Knob / boss ----
 knob_d      = 18;
-knob_h      = 10;
+knob_h      = 10;     // bolt-face reference height (nub sits here)
 rim_chamfer = 0.8;
 
-// ---- Dish (knurl final only; ignored when socket=true) ----
+// ---- Dish (knurl body only) ----
 dish_depth  = 1.5;
 dish_dia    = 12;
 
@@ -74,7 +84,7 @@ fin_tip_r   = 4;
 fin_scoop_r = 18;
 fin_scoop_x = 12;
 fin_scoop_y = 16;
-fin_angle   = 90;    // rotation about nub axis (fin AND spur)
+fin_angle   = 90;    // orientation about nub axis (fin, spur, scallop)
 
 // ---- Spur (blade standing off the receiver) ----
 spur_out    = 16;
@@ -89,7 +99,7 @@ spur_round  = 1.2;
 // ---- Spur skeleton window ----
 spur_hollow = true;
 spur_wall   = 3.5;
-spur_web    = 5;      // solid band under the nub (hosts internal wm)
+spur_web    = 5;
 
 // ---- Spur jimping ----
 jimp_on     = true;
@@ -98,7 +108,7 @@ jimp_pitch  = 3.0;
 jimp_margin = 3;
 
 // ---- Spur trailing-edge curve ----
-trail_curve = 2.5;    // inward bow (sagitta); 0 = straight
+trail_curve = 2.5;
 
 // ---- Nub: two-tier obround (all dims = OVERALL, tip-to-tip) ----
 // Also defines the socket negative — these ARE the OG measurements.
@@ -120,13 +130,15 @@ knob(fit_clear);
 // for (i = [0:2]) translate([i*24, 0, 0]) knob(i * 0.1);
 
 module knob(fc) {
-    use_socket = socket && body_style != "spur" && !fit_check;
+    use_socket = socket && (body_style=="knurl" || body_style=="fin")
+                 && !fit_check;
     difference() {
         union() {
-            if (fit_check)               cylinder(d=knob_d, h=knob_h);
-            else if (body_style=="fin")  rotate([0,0,fin_angle]) fin_body();
-            else if (body_style=="spur") rotate([0,0,fin_angle]) spur_body();
-            else                         knurled_knob();
+            if (fit_check)                  cylinder(d=knob_d, h=knob_h);
+            else if (body_style=="fin")     rotate([0,0,fin_angle]) fin_body();
+            else if (body_style=="spur")    rotate([0,0,fin_angle]) spur_body();
+            else if (body_style=="scallop") scallop_body();
+            else                            knurled_knob();
             translate([0,0,knob_h])
                 obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
             translate([0,0,knob_h + neck_h])
@@ -134,6 +146,8 @@ module knob(fc) {
                             head_h, head_ch, head_uch);
             if (body_style=="spur" && spur_support && !fit_check)
                 blade_frame() spur_support_body();
+            if (body_style=="scallop" && scal_support && !fit_check)
+                rotate([0,0,fin_angle]) scallop_pedestal();
         }
         if (use_socket) socket_cut();
         if (!fit_check && !use_socket && body_style=="knurl" && dish_depth > 0) {
@@ -154,29 +168,78 @@ module knob(fc) {
     }
 }
 
+// ================ SCALLOP ================
+// Raked plane in the fin_angle-local frame: face height varies linearly
+// from scal_low at local -X to scal_high at local +X. Rake angle:
+function scal_a()  = atan((scal_high - scal_low) / knob_d);
+// plane height at local x=0:
+function scal_z0() = knob_h - (scal_low + scal_high)/2;
+
+module scallop_body() {
+    assert(scal_high > scal_low, "scallop: scal_high must exceed scal_low");
+    zb = knob_h - scal_high;   // lowest body point (high-side rim)
+    difference() {
+        // stock: knurled or plain, bolt-side rim chamfer
+        intersection() {
+            if (scal_knurl) {
+                kp = knurl_params(knurl_preset, knob_d);
+                translate([0,0,zb])
+                    knurl_cyl(knob_d, scal_high, kp[0], kp[1], kp[2]);
+            } else
+                translate([0,0,zb]) cylinder(d=knob_d, h=scal_high);
+            rotate_extrude()
+                polygon([
+                    [0,zb],[knob_d/2,zb],
+                    [knob_d/2,knob_h-rim_chamfer],
+                    [knob_d/2-rim_chamfer,knob_h],[0,knob_h]
+                ]);
+        }
+        rotate([0,0,fin_angle]) {
+            // rake: remove everything below the slanted face plane
+            translate([0,0,scal_z0()])
+                rotate([0, scal_a(), 0])
+                    translate([0,0,-25]) cube([60,60,50], center=true);
+            // concave dish, centered on the slanted face, bites scal_dish_d
+            translate([0,0,scal_z0()])
+                rotate([0, scal_a(), 0])
+                    translate([0,0,-(scal_dish_r - scal_dish_d)])
+                        sphere(r=scal_dish_r);
+        }
+    }
+}
+
+// breakaway pedestal for the nub-up print: fills bed -> raked face
+// minus sup_gap; part stands on it, rake/dish/knurl print as top-quality
+// surfaces, nub needs no support. Snap off after printing.
+module scallop_pedestal() {
+    zb   = knob_h - scal_high;
+    gapv = sup_gap / cos(scal_a());   // vertical gap for the tilted plane
+    bed  = zb - 0.6;                  // pedestal base plane
+    intersection() {
+        translate([0,0,bed]) cylinder(d=knob_d - 3, h=scal_high + 1);
+        // keep only below (face plane - gap)
+        translate([0,0,scal_z0() - gapv])
+            rotate([0, scal_a(), 0])
+                translate([0,0,-25]) cube([60,60,50], center=true);
+    }
+}
+
 // ================ BLADE FRAME ================
-// spur_body extrudes via rotate([90,0,90]): in the fin_angle-rotated
-// frame the blade's length axis lands on local Y, thickness on local X —
-// i.e. the blade sits at fin_angle + 90 in world terms. All spur
-// auxiliaries are authored in "blade-local" coords (length along X,
-// thickness along Y) and placed through this helper.
+// spur_body extrudes via rotate([90,0,90]): blade sits at fin_angle+90
+// in world terms. Spur auxiliaries are authored in blade-local coords
+// (length along X, thickness along Y) and placed through this helper.
 module blade_frame() rotate([0,0,fin_angle + 90]) children();
 
 // ================ SPUR SUPPORT ================
-// Blade-local frame: thickness along Y, bed = -Y face when side-lying.
-// Nub footprint in this frame = world nub rotated by -(fin_angle+90).
-
-// lowest extent of the head footprint below the nub axis, blade-local
 function nub_hy() = (head_len - head_w)/2 * abs(cos(fin_angle)) + head_w/2;
 
-// blade-local head footprint, grown (g>0) or shrunk (g<0) per side
 module nub_fp2d(g)
     rotate([0,0,-(fin_angle + 90)]) stadium2d(head_len, head_w, g);
 
 module spur_support_body() {
-    prot = max(0, nub_hy() - spur_thick/2);   // nub past blade face?
-    rail_h = prot > 0 ? prot + 0.4 : 0;       // skid rail height
-    bed  = -(spur_thick/2 + rail_h);          // blade-local bed plane (y)
+    prot = max(0, nub_hy() - spur_thick/2);
+    rail_h = prot > 0 ? prot + 0.4 : 0;
+    bed  = -(spur_thick/2 + rail_h);
 
     if (rail_h > 0)
         echo(str("SPUR SUPPORT: nub protrudes ", prot,
@@ -184,8 +247,6 @@ module spur_support_body() {
                  " -> fused skid rails (h=", rail_h,
                  "mm) added under the blade. CUT OFF after printing."));
 
-    // breakaway tower: nub footprint swept down to the bed, gap all
-    // around the nub itself (snaps off; no scar on the bearing ledge)
     translate([0,0,knob_h])
         linear_extrude(neck_h + head_h)
             difference() {
@@ -199,8 +260,6 @@ module spur_support_body() {
                 nub_fp2d(sup_gap);
             }
 
-    // fused sacrificial skid rails so the blade still lies flat
-    // (only when the nub protrudes past the blade face, e.g. fin_angle~0)
     if (rail_h > 0)
         for (sx = [-1, 1])
             translate([sx*(spur_base/2 - 2) - 0.6, bed, 0])
@@ -235,6 +294,8 @@ module wm_internal_cut(sock) {
                          font="Liberation Sans:style=Bold",
                          halign="center", valign="center");
     else
+        // knurl/fin/scallop: mid-body void; for scallop this sits well
+        // above the raked face + dish at all default proportions
         translate([0, 0, 0.42*knob_h])
             linear_extrude(wm_void_t)
                 text(wm_text, size=wm_size,
@@ -368,9 +429,6 @@ module spur_outline() {
     }
 }
 
-// v18: extrusion axis fixed per field check — blade faces the correct
-// direction with [90,0,90] (profile length lands on local Y, thickness
-// on local X). Auxiliaries compensate via blade_frame().
 module spur_body()
     rotate([90,0,90])
         linear_extrude(spur_thick, center=true)
