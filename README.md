@@ -147,7 +147,9 @@ integrated supports fight resin peel-force orientation.
 ## License & attribution
 
 **License:** [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+
 **Author:** Simon Fischer - first published 2026-07-20
+
 **Canonical source:** https://github.com/x42553/VZ61-Knob/
 
 You are free to print, modify, share, and sell prints of this design,
