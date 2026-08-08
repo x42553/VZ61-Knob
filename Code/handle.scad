@@ -1,10 +1,12 @@
-/*  Parametric Extended Knurled Vz.61 Charging Knob — v4
-    - Helical diamond knurl, chamfered rims, exact-depth thumb dish
-    - Two-tier obround nub from OG measurements
-    - Debossed fit_clear variant label on the top face
-    Print: flat (dished) face down, 100% infill, 5+ walls, CF-nylon or resin.
-    0.6mm nozzle: consider knurl_n=16 / knurl_depth=0.8 for crisper diamonds.
+/*  Parametric Extended Knurled Vz.61 Charging Knob — v4.1
+    - fit_check=true: plain cylinder body, no dish (fast fit coupon)
+    - fit_check=false: full knurl + chamfers + dish
+    - Two-tier obround nub, debossed fit_clear label
+    Print: flat face down, 100% infill, 5+ walls.
 */
+
+// ---- Mode ----
+fit_check   = true;   // true = plain fast coupon, false = final knob
 
 // ---- Knob ----
 knob_d      = 16;
@@ -34,26 +36,31 @@ head_ch    = 0.5;   // chamfer around top edge
 fit_clear  = 0.0;   // subtracted from nub radii; tune via test coupon
 
 // ---- Variant label ----
-label_txt  = str(fit_clear);   // auto from fit_clear, or override e.g. "0.1A"
 label_size = 2.6;
-label_deep = 0.4;              // 2 layers at 0.2mm
+label_deep = 0.4;   // 2 layers at 0.2mm
 
 $fn = 90;
 
 // ================= MAIN =================
 knob(fit_clear);
 
+// batch of variants instead:
+// for (i = [0:2]) translate([i*24, 0, 0]) knob(i * 0.1);
+
 module knob(fc) {
     difference() {
         union() {
-            knurled_knob();
+            if (fit_check)
+                cylinder(d=knob_d, h=knob_h);
+            else
+                knurled_knob();
             translate([0,0,knob_h])
                 obround(neck_mid, neck_r - fc, neck_h);
             translate([0,0,knob_h + neck_h])
                 obround_ch(head_mid, head_r - fc, head_h, head_ch);
         }
-        // thumb dish — exact depth
-        if (dish_depth > 0) {
+        // thumb dish — final version only (skip on coupon: faster, flatter bed face)
+        if (!fit_check && dish_depth > 0) {
             R = (dish_dia*dish_dia/4 + dish_depth*dish_depth) / (2*dish_depth);
             translate([0,0,-(R - dish_depth)]) sphere(r=R);
         }
