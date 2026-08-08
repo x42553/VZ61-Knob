@@ -1,21 +1,28 @@
-/*  Parametric Vz.61 Charging Knob — v7
-    body_style: "knurl" = round knurled knob | "fin" = shark fin
-    fit_check=true overrides body with a plain cylinder (fast coupon)
+/*  Parametric Vz.61 Charging Knob — v8
+    body_style: "knurl" | "fin"   fit_check: plain coupon body
+    socket=true: keyhole bayonet in the face to stow the OG knob
+                 (insert, twist 90°, lock with radial M3 grub screw)
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
-    45° head underside chamfer -> fully support-free.
-    Print: flat face down, 100% infill, 5+ walls, layer 0.2mm max.
+    45° head underside chamfer -> support-free.
+    Print: face down, 100% infill, 5+ walls, layer 0.2mm max.
 */
 
 // ---- Mode ----
 fit_check   = false;
-body_style  = "fin";   // "knurl" | "fin"
+body_style  = "knurl";   // "knurl" | "fin"
+socket      = true;      // OG-knob stowage socket (replaces dish)
+
+// ---- Socket ----
+sock_clear  = 0.15;   // per-side; printed holes run tight — start here
+sock_plate  = 1.4;    // retention plate (slightly under OG neck 1.5)
+sock_screw  = 2.6;    // M3 self-tap pilot Ø; 0 = no screw hole
 
 // ---- Knob / boss ----
 knob_d      = 16;
 knob_h      = 10;
 rim_chamfer = 0.8;
 
-// ---- Dish (exposed face, z=0; final only) ----
+// ---- Dish (final only, ignored when socket=true) ----
 dish_depth  = 1.5;
 dish_dia    = 12;
 
@@ -25,15 +32,16 @@ knurl_depth = 0.6;
 helix_angle = 30;
 
 // ---- Fin ----
-fin_len     = 22;    // boss center -> tip center
-fin_sweep   = 6;     // tip drop sideways (sweep of the blade)
-fin_tip_r   = 4;     // tip roundness
-fin_scoop_r = 18;    // radius of concave hook cut
-fin_scoop_x = 12;    // scoop center along fin
-fin_scoop_y = 16;    // scoop center offset (bigger = shallower bite)
-fin_angle   = 0;     // rotate fin about nub axis, relative to slot (X)
+fin_len     = 22;
+fin_sweep   = 6;
+fin_tip_r   = 4;
+fin_scoop_r = 18;
+fin_scoop_x = 12;
+fin_scoop_y = 16;
+fin_angle   = 0;
 
 // ---- Nub: two-tier obround (all dims = OVERALL, tip-to-tip) ----
+// Also defines the socket negative — these ARE the OG measurements.
 neck_len   = 9;      neck_w = 3.0;  neck_h = 1.5;
 head_len   = 10;     head_w = 4.0;  head_h = 3.5;
 head_ch    = 0.5;    head_uch = 0.5;
@@ -53,16 +61,17 @@ knob(fit_clear);
 module knob(fc) {
     difference() {
         union() {
-            if (fit_check)            cylinder(d=knob_d, h=knob_h);
+            if (fit_check)              cylinder(d=knob_d, h=knob_h);
             else if (body_style=="fin") rotate([0,0,fin_angle]) fin_body();
-            else                      knurled_knob();
+            else                        knurled_knob();
             translate([0,0,knob_h])
                 obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
             translate([0,0,knob_h + neck_h])
                 obround_ch2(head_len - head_w, head_w/2 - fc,
                             head_h, head_ch, head_uch);
         }
-        if (!fit_check && dish_depth > 0) {
+        if (socket) socket_cut();
+        if (!fit_check && !socket && dish_depth > 0) {
             R = (dish_dia*dish_dia/4 + dish_depth*dish_depth) / (2*dish_depth);
             translate([0,0,-(R - dish_depth)]) sphere(r=R);
         }
@@ -74,26 +83,44 @@ module knob(fc) {
     }
 }
 
+// ================ SOCKET ================
+module socket_cut() {
+    // keyhole through plate: head entry obround + neck rotation bore
+    translate([0,0,-0.01])
+        linear_extrude(sock_plate + 0.02) {
+            hull() for (x = [-1,1])
+                translate([x*(head_len - head_w)/2, 0])
+                    circle(r=head_w/2 + sock_clear);
+            circle(d=neck_len + 2*sock_clear);
+        }
+    // rotation cavity (stadium's swept circle = its overall length)
+    translate([0,0,sock_plate])
+        cylinder(d=head_len + 2*sock_clear + 0.4, h=head_h + 0.4);
+    // radial grub screw pilot (+Y wall), bears on head end after 90° twist
+    if (sock_screw > 0)
+        translate([0, knob_d/2 + 1, sock_plate + head_h/2 + 0.2])
+            rotate([90,0,0])
+                cylinder(d=sock_screw, h=knob_d/2 - head_len/2 + 2, $fn=24);
+}
+
 // ================ FIN ================
 module fin_profile() {
     difference() {
         hull() {
-            circle(d=knob_d);                                  // boss
-            translate([fin_len, -fin_sweep]) circle(r=fin_tip_r); // tip
+            circle(d=knob_d);
+            translate([fin_len, -fin_sweep]) circle(r=fin_tip_r);
         }
-        translate([fin_scoop_x, fin_scoop_y]) circle(r=fin_scoop_r); // hook
+        translate([fin_scoop_x, fin_scoop_y]) circle(r=fin_scoop_r);
     }
 }
 
-// extrude with top+bottom chamfer via offset slices
 module fin_body(steps=4) {
     ch = rim_chamfer; dz = ch/steps;
     for (i=[0:steps-1]) {
         translate([0,0,i*dz]) linear_extrude(dz+0.01)
             offset(r=-(ch-(i+1)*dz)) fin_profile();
         translate([0,0,knob_h-(i+1)*dz]) linear_extrude(dz+0.01)
-            offset(r=-(ch-(i+1)*dz))
-                fin_profile();
+            offset(r=-(ch-(i+1)*dz)) fin_profile();
     }
     translate([0,0,ch]) linear_extrude(knob_h-2*ch) fin_profile();
 }
