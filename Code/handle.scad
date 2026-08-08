@@ -1,12 +1,13 @@
-/*  Parametric Vz.61 Charging Knob — v10
+/*  Parametric Vz.61 Charging Knob — v12
     body_style: "knurl" | "fin" | "spur"
       knurl: round knurled knob          (face-down print)
       fin:   blade in the face plane     (face-down print)
-      spur:  blade standing OFF the receiver, T-style (print lying on
-             blade side; small support tower under the nub only)
+      spur:  blade standing OFF the receiver — hollow window, jimped +
+             curved trailing edge (print lying on blade side; small
+             support tower under the nub only)
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole to stow/use the OG knob — twist 90° CCW,
-      lock with radial M3 grub screw. KNURL/FIN ONLY (spur has no face).
+      lock with radial M3 grub screw. KNURL/FIN ONLY.
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
     45° head underside chamfer.
     Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for fin/spur.
@@ -57,13 +58,27 @@ spur_scoop_r   = 14; // finger-hook cut on leading edge
 spur_scoop_off = 11; // scoop center dist from blade edge; smaller = deeper
 spur_round  = 1.2;   // profile corner rounding
 
+// ---- Spur skeleton window ----
+spur_hollow = true;
+spur_wall   = 3.5;   // rim thickness all around the window
+spur_web    = 5;     // solid band kept under the nub (base side)
+
+// ---- Spur jimping (trailing edge serrations) ----
+jimp_on     = true;
+jimp_r      = 1.0;   // notch radius (depth = r, width = 2r)
+jimp_pitch  = 3.0;   // center-to-center spacing
+jimp_margin = 3;     // keep-clear from base corner and tip
+
+// ---- Spur trailing-edge curve ----
+trail_curve = 2.5;   // inward bow depth (sagitta); 0 = straight
+
 // ---- Nub: two-tier obround (all dims = OVERALL, tip-to-tip) ----
 // Also defines the socket negative — these ARE the OG measurements.
 neck_len   = 9;      neck_w = 3.0;  neck_h = 1.5;
 head_len   = 10;     head_w = 4.0;  head_h = 3.5;
 head_ch    = 0.5;    head_uch = 0.5;
 
-fit_clear  = 0.0;
+fit_clear  = 0.0;    // validated on coupons: 0.0
 
 // ---- Variant label ----
 label_size = 2.6;
@@ -79,10 +94,10 @@ module knob(fc) {
     use_socket = socket && body_style != "spur" && !fit_check;
     difference() {
         union() {
-            if (fit_check)              cylinder(d=knob_d, h=knob_h);
-            else if (body_style=="fin") rotate([0,0,fin_angle]) fin_body();
+            if (fit_check)               cylinder(d=knob_d, h=knob_h);
+            else if (body_style=="fin")  rotate([0,0,fin_angle]) fin_body();
             else if (body_style=="spur") rotate([0,0,fin_angle]) spur_body();
-            else                        knurled_knob();
+            else                         knurled_knob();
             translate([0,0,knob_h])
                 obround(neck_len - neck_w, neck_w/2 - fc, neck_h);
             translate([0,0,knob_h + neck_h])
@@ -147,9 +162,64 @@ module fin_body(steps=4) {
 }
 
 // ================ SPUR ================
-// 2D profile in x/y; y maps to world Z (y=knob_h at nub face,
-// y=0 at old outer face, negative y = projecting outward)
+function unit(v) = v / norm(v);
+
+function spur_P()  = [spur_base/2, 0];                      // base corner
+function spur_Ct() = [spur_rake, -spur_out + spur_tip_r];   // tip circle center
+function spur_tdir() =
+    let(dv = unit(spur_Ct() - spur_P()),
+        a  = asin(spur_tip_r / norm(spur_Ct() - spur_P())))
+    [dv.x*cos(a) - dv.y*sin(a), dv.x*sin(a) + dv.y*cos(a)];
+function spur_T() = spur_P() + spur_tdir()
+    * sqrt(pow(norm(spur_Ct()-spur_P()), 2) - spur_tip_r*spur_tip_r);
+
+// arc through P and T with sagitta trail_curve
+function trail_R() =
+    let(c = norm(spur_T() - spur_P()))
+    (c*c/4 + trail_curve*trail_curve) / (2*trail_curve);
+function trail_O() =
+    let(M = (spur_P() + spur_T())/2, t = unit(spur_T() - spur_P()))
+    M + [-t.y, t.x] * (trail_R() - trail_curve);
+
+module jimping2d() {
+    if (trail_curve > 0) {
+        O = trail_O(); R = trail_R();
+        aP = atan2(spur_P().y - O.y, spur_P().x - O.x);
+        aT = atan2(spur_T().y - O.y, spur_T().x - O.x);
+        dA = aT - aP;
+        sw = dA > 180 ? dA - 360 : dA < -180 ? dA + 360 : dA;
+        mA = jimp_margin / R * 180/PI;
+        pA = jimp_pitch  / R * 180/PI;
+        n  = floor((abs(sw) - 2*mA) / pA);
+        s  = sign(sw);
+        for (i = [0:n]) {
+            a = aP + s*(mA + i*pA);
+            translate(trail_O() + R*[cos(a), sin(a)])
+                circle(r=jimp_r, $fn=24);
+        }
+    } else {
+        P = spur_P(); t = spur_tdir();
+        L = sqrt(pow(norm(spur_Ct()-P),2) - spur_tip_r*spur_tip_r);
+        n = floor((L - 2*jimp_margin) / jimp_pitch);
+        for (i = [0:n])
+            translate(P + t*(jimp_margin + i*jimp_pitch))
+                circle(r=jimp_r, $fn=24);
+    }
+}
+
 module spur_profile() {
+    difference() {
+        spur_outline();
+        if (spur_hollow)
+            intersection() {
+                offset(r=-spur_wall) spur_outline();
+                translate([-50, -100]) square([100, 100 + knob_h - spur_web]);
+            }
+        if (jimp_on) jimping2d();
+    }
+}
+
+module spur_outline() {
     offset(r=spur_round) offset(delta=-spur_round)
     difference() {
         hull() {
@@ -159,6 +229,8 @@ module spur_profile() {
         }
         translate([-(spur_base/2 + spur_scoop_off), -spur_out/2])
             circle(r=spur_scoop_r);
+        if (trail_curve > 0)
+            translate(trail_O()) circle(r=trail_R(), $fn=180);
     }
 }
 
