@@ -1,4 +1,4 @@
-/*  Parametric Vz.61 Charging Knob — v17
+/*  Parametric Vz.61 Charging Knob — v18
     body_style: "knurl" | "fin" | "spur"
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole (knurl/fin only), conical roof,
@@ -6,16 +6,17 @@
     knurl_preset: "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
     Watermarks: wm_visible (deboss) + wm_internal (buried void,
       auto-skipped with socket)
-    v17: spur_support — INTEGRATED breakaway support for the spur's
-      side-lying FDM print (replaces slicer-generated tower):
-      - tower under the nub, sized from the nub's rotated footprint,
-        separated by sup_gap (~1 layer); snaps off by hand
-      - if fin_angle makes the nub protrude past the blade face
-        (|sin(fin_angle)| large, e.g. 90deg), fused skid rails are added
-        under the blade automatically so the part still lies flat;
-        rails are sacrificial — cut/sand off after printing (echo warns)
-      - FDM ONLY: SLS needs no supports at all (powder bed);
-        SLA should use the slicer's own angled supports instead
+    v18: spur blade orientation corrected — spur_body now extrudes with
+      rotate([90,0,90]) (blade +90deg vs v17; field-verified correct
+      facing). ALL spur auxiliaries (support tower, fit label, both
+      watermarks) re-derived in the new blade frame (fin_angle + 90).
+      Consequence: at the default fin_angle=90 the nub head now lies
+      WITHIN the blade thickness -> the simple breakaway tower suffices
+      and no skid rails are generated. Rails still auto-appear for
+      fin_angle near 0/180, where the head protrudes past the blade
+      faces (echo warns; cut rails off after printing).
+    spur_support: FDM ONLY — SLS needs no supports (powder bed);
+      SLA should use the slicer's own angled supports instead.
     Two-tier obround nub (dims = OVERALL), head_uch default 0
     (validated flat bearing ledge).
     Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for
@@ -28,8 +29,8 @@ body_style  = "spur";   // "knurl" | "fin" | "spur"
 socket      = false;     // OG-knob bayonet socket (knurl/fin only)
 
 // ---- Spur integrated print support (FDM side-lying print) ----
-spur_support = true;    // breakaway tower under the nub (spur only)
-sup_gap      = 0.20;     // breakaway gap, ~1 layer height
+spur_support = false;    // breakaway tower under the nub (spur only)
+sup_gap      = 0.2;     // breakaway gap, ~1 layer height
 sup_inset    = 0.6;      // tower shrink vs nub footprint, per side
 
 // ---- Watermarks ----
@@ -132,16 +133,16 @@ module knob(fc) {
                 obround_ch2(head_len - head_w, head_w/2 - fc,
                             head_h, head_ch, head_uch);
             if (body_style=="spur" && spur_support && !fit_check)
-                rotate([0,0,fin_angle]) spur_support_body();
+                blade_frame() spur_support_body();
         }
         if (use_socket) socket_cut();
         if (!fit_check && !use_socket && body_style=="knurl" && dish_depth > 0) {
             R = (dish_dia*dish_dia/4 + dish_depth*dish_depth) / (2*dish_depth);
             translate([0,0,-(R - dish_depth)]) sphere(r=R);
         }
-        // fit label (bolt-side face); spur: on base top face, rotated in
+        // fit label (bolt-side face); spur: on base top face, in blade frame
         if (body_style=="spur")
-            rotate([0,0,fin_angle])
+            blade_frame()
                 translate([(head_len/2 + spur_base/2)/2, 0, knob_h - label_deep])
                     deboss_text(str(fc), label_size, label_deep, 90);
         else
@@ -153,21 +154,29 @@ module knob(fc) {
     }
 }
 
+// ================ BLADE FRAME ================
+// spur_body extrudes via rotate([90,0,90]): in the fin_angle-rotated
+// frame the blade's length axis lands on local Y, thickness on local X —
+// i.e. the blade sits at fin_angle + 90 in world terms. All spur
+// auxiliaries are authored in "blade-local" coords (length along X,
+// thickness along Y) and placed through this helper.
+module blade_frame() rotate([0,0,fin_angle + 90]) children();
+
 // ================ SPUR SUPPORT ================
-// Local blade frame: thickness along Y, bed = -Y face when side-lying.
-// Nub footprint in this frame = world nub rotated by -fin_angle.
+// Blade-local frame: thickness along Y, bed = -Y face when side-lying.
+// Nub footprint in this frame = world nub rotated by -(fin_angle+90).
 
-// lowest extent of the head footprint below the nub axis, local frame
-function nub_hy() = (head_len - head_w)/2 * abs(sin(fin_angle)) + head_w/2;
+// lowest extent of the head footprint below the nub axis, blade-local
+function nub_hy() = (head_len - head_w)/2 * abs(cos(fin_angle)) + head_w/2;
 
-// local-frame head footprint, grown (g>0) or shrunk (g<0) per side
+// blade-local head footprint, grown (g>0) or shrunk (g<0) per side
 module nub_fp2d(g)
-    rotate([0,0,-fin_angle]) stadium2d(head_len, head_w, g);
+    rotate([0,0,-(fin_angle + 90)]) stadium2d(head_len, head_w, g);
 
 module spur_support_body() {
     prot = max(0, nub_hy() - spur_thick/2);   // nub past blade face?
     rail_h = prot > 0 ? prot + 0.4 : 0;       // skid rail height
-    bed  = -(spur_thick/2 + rail_h);          // local bed plane (y)
+    bed  = -(spur_thick/2 + rail_h);          // blade-local bed plane (y)
 
     if (rail_h > 0)
         echo(str("SPUR SUPPORT: nub protrudes ", prot,
@@ -191,6 +200,7 @@ module spur_support_body() {
             }
 
     // fused sacrificial skid rails so the blade still lies flat
+    // (only when the nub protrudes past the blade face, e.g. fin_angle~0)
     if (rail_h > 0)
         for (sx = [-1, 1])
             translate([sx*(spur_base/2 - 2) - 0.6, bed, 0])
@@ -206,7 +216,7 @@ module deboss_text(t, sz, dp, rot=0)
 
 module wm_visible_cut() {
     if (body_style == "spur")
-        rotate([0,0,fin_angle])
+        blade_frame()
             translate([-(head_len/2 + spur_base/2)/2, 0, knob_h - wm_deep])
                 deboss_text(wm_text, wm_size, wm_deep, 90);
     else
@@ -218,7 +228,7 @@ module wm_internal_cut(sock) {
     if (sock)
         echo("WATERMARK: internal void skipped (socket occupies the safe volume)");
     else if (body_style == "spur")
-        rotate([0,0,fin_angle])
+        blade_frame()
             translate([0, 0, knob_h - spur_web + 1.2])
                 linear_extrude(wm_void_t)
                     text(wm_text, size=wm_size,
@@ -358,6 +368,9 @@ module spur_outline() {
     }
 }
 
+// v18: extrusion axis fixed per field check — blade faces the correct
+// direction with [90,0,90] (profile length lands on local Y, thickness
+// on local X). Auxiliaries compensate via blade_frame().
 module spur_body()
     rotate([90,0,90])
         linear_extrude(spur_thick, center=true)
