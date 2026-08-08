@@ -1,76 +1,89 @@
-/* 
-   Parametric Extended & Knurled Vz.61 Charging Handle/Knob
-
-   Tips for printing: 
-   - Print with the large flat face of the knob on the print bed.
-   - Use high infill (80-100%) and 4+ walls for structural strength.
-   - If using FDM plastic, hand-fitting the mounting nub with a fine 
-     file is highly recommended for a crisp, perfect fit into your bolt.
+/*  Parametric Extended Knurled Vz.61 Charging Knob — v2
+    - True helical diamond knurl (twisted extrude intersection)
+    - Chamfered rims, parametrically-correct thumb dish
+    - Filleted nub root + optional M4 steel-core bore (recommended)
+    Print: flat face down, 100% infill, 5+ walls. If dish quality
+    on the bed face bothers you, set dish_depth = 0 or flip and
+    support the nub.
 */
-// --- PARAMETERS ---
-// Knob Dimensions
-knob_diameter  = 16;      // Original is tiny (~10mm); 16-18mm gives great grip
-knob_thickness = 10;      // Thickness of the main outer body
-ergonomic_dish = 1.5;     // Depth of the subtle thumb dish on the face
-// Knurling Settings
-knurl_lines     = 18;     // Total number of criss-cross cuts around the perimeter
-knurl_depth     = 0.6;    // Depth of the texture cuts
-knurl_width     = 1.0;    // Width of the knurling grooves
-// Mounting Nub Dimensions (The part that slots into the bolt)
-// Note: Measure your original nub or bolt slot carefully!
-nub_diameter   = 5.5;     // Diameter of the inner neck / mounting pin
-nub_length     = 6.0;     // How far the nub extends into the receiver/bolt
-nub_flat_cut   = 1.2;     // Flat engagement depth (if your bolt uses a keyed slot)
-$fn = 60;                 // Overall geometry smoothness
-// --- MAIN ASSEMBLY ---
+
+// ---- Knob ----
+knob_d      = 16;
+knob_h      = 10;
+rim_chamfer = 0.8;
+
+// ---- Dish (exposed face, z=0) ----
+dish_depth  = 1.5;    // actual depth, guaranteed
+dish_dia    = 12;     // opening diameter on the face
+
+// ---- Knurl ----
+knurl_n     = 24;     // teeth around circumference (pitch = PI*d/n ≈ 2.1mm)
+knurl_depth = 0.6;
+helix_angle = 30;     // degrees
+
+// ---- Nub ----
+nub_d       = 5.5;
+nub_len     = 6.0;
+nub_flat    = 1.2;    // depth of keying flat (0 = none)
+nub_fillet  = 1.0;    // root fillet — do not skip this
+
+// ---- Optional steel core ----
+steel_core  = false;  // true: M4 screw through-bore + counterbore
+core_d      = 4.3;    // M4 clearance
+cbore_d     = 8.2;    // socket head
+cbore_h     = 4.2;
+
+$fn = 90;
+
+// ================= MAIN =================
 difference() {
     union() {
-        // Main Textured Knob Body
-        knurled_body(d=knob_diameter, h=knob_thickness, n=knurl_lines, depth=knurl_depth, kw=knurl_width);
-
-        // Mounting Pin / Nub Extension
-        translate([0, 0, knob_thickness/2])
-            mounting_nub(d=nub_diameter, h=nub_length, flat=nub_flat_cut);
-    }
-
-    // Ergonomic Thumb Dish (removes material from the exposed front face)
-    translate([0, 0, -knob_thickness/2 - 18]) // Big sphere cutout
-        sphere(r=20 + ergonomic_dish);
-}
-// --- MODULES ---
-// Generates the main cylindrical body with crossed knurling texture
-module knurled_body(d, h, n, depth, kw) {
-    difference() {
-        // Base Cylinder
-        cylinder(d=d, h=h, center=true);
-
-        // Right-handed diamond cuts
-        for (i = [0 : n-1]) {
-            rotate([0, 0, i * (360 / n)])
-                translate([d/2 - depth/2, 0, 0])
-                    rotate([35, 0, 0]) // Angle of twist
-                        cube([depth * 2, kw, h * 2], center=true);
-        }
-
-        // Left-handed diamond cuts
-        for (i = [0 : n-1]) {
-            rotate([0, 0, i * (360 / n)])
-                translate([d/2 - depth/2, 0, 0])
-                    rotate([-35, 0, 0]) // Opposite twist
-                        cube([depth * 2, kw, h * 2], center=true);
+        knurled_knob();
+        // nub + root fillet, keyed flat cut through both
+        difference() {
+            union() {
+                translate([0,0,knob_h])
+                    cylinder(d=nub_d, h=nub_len);
+                translate([0,0,knob_h])
+                    cylinder(d1=nub_d+2*nub_fillet, d2=nub_d, h=nub_fillet);
+            }
+            if (nub_flat > 0)
+                translate([nub_d/2 - nub_flat, -25, knob_h - 0.01])
+                    cube([50, 50, nub_len + 1]);
         }
     }
+    // thumb dish — exact depth
+    if (dish_depth > 0) {
+        R = (dish_dia*dish_dia/4 + dish_depth*dish_depth) / (2*dish_depth);
+        translate([0,0,-(R - dish_depth)]) sphere(r=R);
+    }
+    // steel core bore
+    if (steel_core) {
+        translate([0,0,-1]) cylinder(d=core_d, h=knob_h+nub_len+2);
+        translate([0,0,-0.01]) cylinder(d=cbore_d, h=cbore_h);
+    }
 }
-// Generates the attachment nub that locks into the bolt slot
-module mounting_nub(d, h, flat) {
-    difference() {
-        // Standard pin extension
-        cylinder(d=d, h=h, $fn=40);
 
-        // Optional flat side cutout (common on Vz.61 handles to lock alignment)
-        if (flat > 0) {
-            translate([d/2 - flat + 5/2, 0, h/2])
-                cube([5, d + 1, h + 1], center=true);
-        }
+// ================ MODULES ================
+module knurled_knob() {
+    intersection() {
+        knurl_cyl(knob_d, knob_h, knurl_n, knurl_depth, helix_angle);
+        // chamfer envelope
+        rotate_extrude()
+            polygon([
+                [0,0],[knob_d/2-rim_chamfer,0],[knob_d/2,rim_chamfer],
+                [knob_d/2,knob_h-rim_chamfer],[knob_d/2-rim_chamfer,knob_h],[0,knob_h]
+            ]);
+    }
+}
+
+module knurl_cyl(d, h, n, depth, ha) {
+    twist = 360 * h * tan(ha) / (PI * d);
+    pts = [for (i=[0:2*n-1])
+            let(a = i*180/n, r = (i%2==0) ? d/2 : d/2-depth)
+            [r*cos(a), r*sin(a)]];
+    intersection() {
+        linear_extrude(h, twist= twist, slices=ceil(h*4), convexity=10) polygon(pts);
+        linear_extrude(h, twist=-twist, slices=ceil(h*4), convexity=10) polygon(pts);
     }
 }
