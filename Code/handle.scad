@@ -1,4 +1,4 @@
-/*  Parametric Vz.61 Charging Knob — v13
+/*  Parametric Vz.61 Charging Knob — v14
     body_style: "knurl" | "fin" | "spur"
       knurl: round knurled knob          (face-down print)
       fin:   blade in the face plane     (face-down print)
@@ -8,10 +8,14 @@
     fit_check=true: plain cylinder coupon body
     socket=true: bayonet keyhole to stow/use the OG knob — twist 90° CCW,
       lock with radial M3 grub screw. KNURL/FIN ONLY.
+      v14: conical self-supporting cavity roof (no internal bridge,
+      no sag into the head's axial clearance). Cone auto-clamped to fit
+      under the nub root.
     knurl_preset: process-optimized knurl texture, pitch-based:
       "fdm04" | "fdm06" | "sla" | "sls" | "cnc" | "custom"
-      (cnc = visual match of DIN 82 RGE 1.0 — for renders/mockups only;
-       real machined knurls are spec'd on the drawing, not modeled)
+      (cnc = visual match of DIN 82 RGE 1.0 — renders/mockups only.
+       NOTE: the socket cavity is an undercut and cannot be milled from
+       the face; for CNC the part must be split body + keyhole plate.)
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
     45° head underside chamfer.
     Print: 100% infill, 5+ walls, layer 0.2mm max, CF-nylon for fin/spur.
@@ -28,6 +32,8 @@ sock_clear  = 0.15;   // per-side vs steel OG nub; coupon-test 0.15/0.25
 sock_plate  = 1.45;   // retention plate; MAX = OG neck height 1.5
 sock_screw  = 2.6;    // M3 self-tap pilot Ø; 0 = none
 sweep_step  = 5;      // degrees per slice of the 90° neck sweep cut
+roof_angle  = 40;     // cavity roof cone angle (deg from horizontal);
+                      // >= ~35 prints support-free. 0 = flat roof (bridge)
 
 // ---- Knob / boss ----
 knob_d      = 18;     // 18 recommended if socket=true; 16 min otherwise
@@ -85,7 +91,7 @@ neck_len   = 9;      neck_w = 3.0;  neck_h = 1.5;
 head_len   = 10;     head_w = 4.0;  head_h = 3.5;
 head_ch    = 0.5;    head_uch = 0.5;
 
-fit_clear  = 0.0;    // validated on coupons: 0.0
+fit_clear  = 0;    // validated on coupons: 0.0
 
 // ---- Variant label ----
 label_size = 2.6;
@@ -130,15 +136,28 @@ module stadium2d(len, w, c)
         translate([x*(len - w)/2, 0]) circle(r=w/2 + c);
 
 module socket_cut() {
+    cav_d   = head_len + 2*sock_clear + 0.4;   // cavity diameter
+    cav_top = sock_plate + head_h + 0.2;       // cylindrical cavity ceiling
+    // cone height for roof_angle, clamped to stay under the nub root
+    cone_h_full = (cav_d/2) * tan(roof_angle);
+    cone_h      = min(cone_h_full, knob_h - 0.4 - cav_top);
+    assert(cone_h > 0 || roof_angle == 0,
+           "socket roof cone does not fit: increase knob_h or lower roof_angle");
+
     // through-plate keyhole: head entry + neck 90° CCW swept region
     translate([0,0,-0.01]) linear_extrude(sock_plate + 0.02) {
         stadium2d(head_len, head_w, sock_clear);
         for (a = [0 : sweep_step : 90])
             rotate([0,0,a]) stadium2d(neck_len, neck_w, sock_clear);
     }
-    // rotation cavity: head turns here, snug axially
+    // rotation cavity: head turns here, snug axially at the rim
     translate([0,0,sock_plate])
-        cylinder(d=head_len + 2*sock_clear + 0.4, h=head_h + 0.2);
+        cylinder(d=cav_d, h=head_h + 0.2);
+    // self-supporting conical roof (dead air above the head; the head
+    // bears on the PLATE, so extra apex depth is harmless)
+    if (roof_angle > 0)
+        translate([0,0,cav_top])
+            cylinder(d1=cav_d, d2=0.8, h=cone_h);
     // radial M3 grub pilot (+Y): bears on head end after twist
     if (sock_screw > 0)
         translate([0, knob_d/2 + 1, sock_plate + head_h/2 + 0.1])
@@ -242,7 +261,7 @@ module spur_outline() {
 }
 
 module spur_body()
-    rotate([90,0,0])
+    rotate([90,0,90])
         linear_extrude(spur_thick, center=true)
             spur_profile();
 
