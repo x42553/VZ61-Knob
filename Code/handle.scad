@@ -1,24 +1,27 @@
-/*  Parametric Vz.61 Charging Knob — v8
+/*  Parametric Vz.61 Charging Knob — v9 "extension socket"
     body_style: "knurl" | "fin"   fit_check: plain coupon body
-    socket=true: keyhole bayonet in the face to stow the OG knob
-                 (insert, twist 90°, lock with radial M3 grub screw)
+    socket=true: bayonet keyhole in the face — insert OG knob, twist 90°,
+      lock with radial M3 grub screw. Swept-shape neck bore -> head bears
+      on plate over its full footprint: usable as a pull-load grip extension.
     Two-tier obround nub (dims = OVERALL), debossed fit_clear label,
     45° head underside chamfer -> support-free.
-    Print: face down, 100% infill, 5+ walls, layer 0.2mm max.
+    Print: face down, 100% infill, 5+ walls, layer 0.2mm max, CF-nylon.
+    NO support inside the socket cavity (unremovable past the plate).
 */
 
 // ---- Mode ----
 fit_check   = false;
 body_style  = "knurl";   // "knurl" | "fin"
-socket      = true;      // OG-knob stowage socket (replaces dish)
+socket      = true;      // OG-knob bayonet socket (replaces dish)
 
 // ---- Socket ----
-sock_clear  = 0.15;   // per-side; printed holes run tight — start here
-sock_plate  = 1.4;    // retention plate (slightly under OG neck 1.5)
-sock_screw  = 2.6;    // M3 self-tap pilot Ø; 0 = no screw hole
+sock_clear  = 0.15;   // per-side vs steel OG nub; coupon-test 0.15/0.25
+sock_plate  = 1.45;   // retention plate; MAX = OG neck height 1.5
+sock_screw  = 2.6;    // M3 self-tap pilot Ø; 0 = none
+sweep_step  = 7.5;    // degrees per slice of the 90° neck sweep cut
 
 // ---- Knob / boss ----
-knob_d      = 16;
+knob_d      = 18;     // bumped from 16: wall + screw thread budget
 knob_h      = 10;
 rim_chamfer = 0.8;
 
@@ -84,21 +87,26 @@ module knob(fc) {
 }
 
 // ================ SOCKET ================
+// 2D stadium, overall length len, width w, plus per-side clearance c
+module stadium2d(len, w, c)
+    hull() for (x = [-1,1])
+        translate([x*(len - w)/2, 0]) circle(r=w/2 + c);
+
 module socket_cut() {
-    // keyhole through plate: head entry obround + neck rotation bore
-    translate([0,0,-0.01])
-        linear_extrude(sock_plate + 0.02) {
-            hull() for (x = [-1,1])
-                translate([x*(head_len - head_w)/2, 0])
-                    circle(r=head_w/2 + sock_clear);
-            circle(d=neck_len + 2*sock_clear);
-        }
-    // rotation cavity (stadium's swept circle = its overall length)
+    // ---- through-plate keyhole ----
+    translate([0,0,-0.01]) linear_extrude(sock_plate + 0.02) {
+        // head entry, along X
+        stadium2d(head_len, head_w, sock_clear);
+        // neck 90° CCW swept region (X -> +Y): head bears everywhere else
+        for (a = [0 : sweep_step : 90])
+            rotate([0,0,a]) stadium2d(neck_len, neck_w, sock_clear);
+    }
+    // ---- rotation cavity: head turns here, snug axially ----
     translate([0,0,sock_plate])
-        cylinder(d=head_len + 2*sock_clear + 0.4, h=head_h + 0.4);
-    // radial grub screw pilot (+Y wall), bears on head end after 90° twist
+        cylinder(d=head_len + 2*sock_clear + 0.4, h=head_h + 0.2);
+    // ---- radial M3 grub pilot (+Y): bears on head end after twist ----
     if (sock_screw > 0)
-        translate([0, knob_d/2 + 1, sock_plate + head_h/2 + 0.2])
+        translate([0, knob_d/2 + 1, sock_plate + head_h/2 + 0.1])
             rotate([90,0,0])
                 cylinder(d=sock_screw, h=knob_d/2 - head_len/2 + 2, $fn=24);
 }
